@@ -9,6 +9,10 @@ import {
   TrendingUp,
   BarChart3,
   PieChart,
+  Info,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { MOCK_ASSUMPTION_DATA } from '../data/mockAssumptionData';
 import { 
@@ -33,8 +37,238 @@ interface ValuationGridProps {
   projectedCommonSizingBasisLabel?: string;
 }
 
+const ASSUMPTION_INFO_NOTE_STORAGE_KEY = 'valueBuddy.assumptionInfoNote.v1';
+const DASHBOARD_INFO_NOTE_STORAGE_KEY = 'valueBuddy.dashboardInfoNote.v2';
+const MARKET_COMPS_INFO_NOTE_STORAGE_KEY = 'valueBuddy.marketCompsInfoNote.v1';
+const RISK_ANALYSIS_INFO_NOTE_STORAGE_KEY = 'valueBuddy.riskAnalysisInfoNote.v1';
+const REPORT_INFO_NOTE_STORAGE_KEY = 'valueBuddy.reportInfoNote.v1';
+
+const DEFAULT_ASSUMPTION_INFO_NOTE = `What is this tab
+
+The Assumptions tab is a central place where all manual inputs and business-specific settings are defined to control how financial data is adjusted, weighted, and evaluated.
+
+It includes inputs related to:
+- Financial adjustments (e.g., rent, owner compensation, one-time items)
+- Weighting logic (historical vs projected data)
+- Valuation methodology
+- Risk and deal-specific parameters
+
+Dates / 2025 Projections
+Input Source:
+- Manual user input (projection year, timeline)
+Used In:
+- Financial Projections -> defines projection periods
+- Valuation Calculations -> future year valuation basis
+
+Historical Financial Weighting
+Input Source:
+- Manual user input (weight % for historical vs recent data)
+Used In:
+- Weighted / Normalized Income -> to compute weighted earnings
+
+Valuation Methodology Weighting
+Input Source:
+- Manual user input (weight assigned to valuation methods)
+Used In:
+- Valuation Calculations -> combines multiple valuation approaches
+
+Adjustments (General)
+Input Source:
+- BUSINESS P&L + manual inputs
+Used In:
+- Projected Income Statement -> adjusted income values
+- Valuation Calculations -> adjusted EBITDA / earnings
+
+Rent Adjustment
+Input Source:
+- BUSINESS P&L (rent expense) + manual adjustment input
+Used In:
+- Projected Income Statement -> adjusted expenses
+- Valuation Calculations -> normalized earnings
+
+Owner's Compensation Adjustments
+Input Source:
+- BUSINESS P&L (salary/compensation) + manual input
+Used In:
+- Projected Income Statement -> adjusted profit
+- Valuation Calculations -> adjusted EBITDA
+
+Discretionary Personal Expenses
+Input Source:
+- BUSINESS P&L + manual identification
+Used In:
+- Projected Income Statement -> add-backs
+- Valuation Calculations -> normalized earnings
+
+One-time Revenue / Expense Adjustments
+Input Source:
+- BUSINESS P&L + manual input
+Used In:
+- Projected Income Statement -> remove non-recurring items
+- Valuation Calculations -> sustainable earnings
+
+Comparable Company Adjustments
+Input Source:
+- Manual input + reference to Comps data
+Used In:
+- Market Comparison (Comps) -> adjusted benchmarking
+- Valuation Calculations -> multiple adjustments
+
+Excluded Assets
+Input Source:
+- BUSINESS BALANCE SHEET + manual selection
+Used In:
+- Valuation Calculations -> removed from enterprise value
+- Proforma Balance Sheet -> adjusted asset base
+
+Excess / Insufficient Cash
+Input Source:
+- BUSINESS BALANCE SHEET + manual input
+Used In:
+- Valuation Calculations -> cash adjustment in equity value
+- Financial Position Analysis
+
+Acquisition Stake Summary
+Input Source:
+- Manual input (deal structure / ownership %)
+Used In:
+- Valuation Calculations -> ownership-based valuation
+- Final equity distribution
+
+Risk Assessment / CSRP Error
+Input Source:
+- Manual input + system-derived risk factors
+Used In:
+- Valuation Calculations -> risk-adjusted valuation
+- Discounting / risk modeling`;
+
+const DEFAULT_DASHBOARD_INFO_NOTE = `What is this tab (Functional)
+
+This tab acts as the financial computation and analysis layer where:
+- Raw financial data is converted into adjusted earnings
+- Historical data is weighted to derive normalized income
+- Key financial metrics and ratios are calculated for evaluation
+
+It is essentially the processing layer that transforms financial data into decision-ready outputs.
+
+Input Sources
+- Projected Income Statement -> base income values
+- Assumptions (Common Adjustments) -> adjustment and weighting logic
+- Proforma Balance Sheet -> required for ratio calculations
+
+Used in (Functional Usage )
+- Valuation Calculations -> provides adjusted and normalized earnings
+- Ratio Analysis -> computes financial performance metrics
+- Weighted / Normalized Income Engine -> derives final earnings values
+- Market Comparison (Comps) -> supplies benchmark-ready financial metrics
+- Report Generation -> feeds final outputs and insights`;
+
+const DEFAULT_MARKET_COMPS_INFO_NOTE = `What is this tab (Functional)
+
+This tab acts as the market benchmarking layer, where the business's financial metrics are compared against similar companies.
+
+It is used to:
+- Derive valuation multiples (e.g., Revenue, EBITDA multiples)
+- Evaluate relative performance
+- Validate whether the business valuation is aligned with market standards
+
+In simple terms:
+It compares the business with market data to support valuation decisions.
+
+Input Sources
+- Dashboard -> provides adjusted and normalized financial metrics (Revenue, EBITDA, Net Income)
+- Comps Data (Comps, Comp Table, Raw/Formatted Data) -> external comparable company data
+- KPI Dashboard BHS -> supporting financial ratios and balance sheet metrics
+- Assumptions (Comparable Company Adjustments) -> manual adjustments to comps
+
+Used in (Functional Usage )
+- Valuation Calculations -> applies market multiples to derive business value
+- Benchmarking Analysis -> compares performance against similar businesses
+- Multiple Selection Logic -> determines appropriate valuation multiples
+- Report Generation -> provides market comparison insights and outputs`;
+
+const DEFAULT_RISK_ANALYSIS_INFO_NOTE = `What is this tab (Functional)
+
+This tab acts as the risk evaluation layer, where the business's financial and operational data is analyzed to determine its risk profile.
+
+It is used to:
+- Assess financial stability and default risk
+- Evaluate variability and reliability of earnings
+- Determine risk adjustments that impact valuation
+
+In simple terms:
+It measures how risky the business is and how that risk should affect valuation.
+
+Input Sources
+- Dashboard -> financial performance metrics and ratios
+- Proforma Balance Sheet -> financial position (liquidity, leverage)
+- Projected Income Statement -> earnings consistency and trends
+- Assumptions (Risk Assessment / CSRP Error) -> user-defined risk inputs
+
+Used in (Functional Usage )
+- Assumptions (Common Adjustments) -> Risk inputs (e.g., Risk Assessment / CSRP Error) are defined here and then used in calculations
+- Dashboard (Adjusted Income Statement / Ratio Analysis) -> Risk impacts interpretation of ratios and performance metrics
+- Valuations (in Report -> Valuations) -> Risk inputs are applied in final valuation calculations (adjusted outputs)
+- Report (Valuations, Charts) -> Risk results are reflected in final outputs and summaries`;
+
+const DEFAULT_REPORT_INFO_NOTE = `What is this tab (Functional)
+
+This tab acts as the final output layer, where all processed financial data, valuation results, and analysis outputs are consolidated into a structured format.
+
+It represents the end result of the entire system, combining:
+- Adjusted financials
+- Valuation outputs
+- Market comparisons
+- Risk considerations
+
+In simple terms:
+This tab presents the final computed results of the financial model.
+
+Input Sources
+- Dashboard -> adjusted income, weighted earnings, ratios
+- Market Comps -> benchmarking and multiple-based inputs
+- Risk Analysis -> risk-adjusted inputs
+- Assumptions (Common Adjustments) -> valuation logic and weighting
+- Proforma Balance Sheet -> financial position outputs
+- Report Template -> structured data from this tab is mapped into predefined report templates`;
+
 export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: ValuationGridProps) => {
   const [activeTab, setActiveTab] = useState('Assumption');
+  const [isAssumptionInfoOpen, setIsAssumptionInfoOpen] = useState(false);
+  const [isEditingAssumptionInfo, setIsEditingAssumptionInfo] = useState(false);
+  const [assumptionInfoDraft, setAssumptionInfoDraft] = useState(DEFAULT_ASSUMPTION_INFO_NOTE);
+  const [assumptionInfoNote, setAssumptionInfoNote] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_ASSUMPTION_INFO_NOTE;
+    return window.localStorage.getItem(ASSUMPTION_INFO_NOTE_STORAGE_KEY) || DEFAULT_ASSUMPTION_INFO_NOTE;
+  });
+  const [isDashboardInfoOpen, setIsDashboardInfoOpen] = useState(false);
+  const [isEditingDashboardInfo, setIsEditingDashboardInfo] = useState(false);
+  const [dashboardInfoDraft, setDashboardInfoDraft] = useState(DEFAULT_DASHBOARD_INFO_NOTE);
+  const [dashboardInfoNote, setDashboardInfoNote] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_DASHBOARD_INFO_NOTE;
+    return window.localStorage.getItem(DASHBOARD_INFO_NOTE_STORAGE_KEY) || DEFAULT_DASHBOARD_INFO_NOTE;
+  });
+  const [isMarketCompsInfoOpen, setIsMarketCompsInfoOpen] = useState(false);
+  const [isEditingMarketCompsInfo, setIsEditingMarketCompsInfo] = useState(false);
+  const [marketCompsInfoDraft, setMarketCompsInfoDraft] = useState(DEFAULT_MARKET_COMPS_INFO_NOTE);
+  const [marketCompsInfoNote, setMarketCompsInfoNote] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_MARKET_COMPS_INFO_NOTE;
+    return window.localStorage.getItem(MARKET_COMPS_INFO_NOTE_STORAGE_KEY) || DEFAULT_MARKET_COMPS_INFO_NOTE;
+  });
+  const [isRiskAnalysisInfoOpen, setIsRiskAnalysisInfoOpen] = useState(false);
+  const [isEditingRiskAnalysisInfo, setIsEditingRiskAnalysisInfo] = useState(false);
+  const [riskAnalysisInfoDraft, setRiskAnalysisInfoDraft] = useState(DEFAULT_RISK_ANALYSIS_INFO_NOTE);
+  const [riskAnalysisInfoNote, setRiskAnalysisInfoNote] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_RISK_ANALYSIS_INFO_NOTE;
+    return window.localStorage.getItem(RISK_ANALYSIS_INFO_NOTE_STORAGE_KEY) || DEFAULT_RISK_ANALYSIS_INFO_NOTE;
+  });
+  const [isReportInfoOpen, setIsReportInfoOpen] = useState(false);
+  const [isEditingReportInfo, setIsEditingReportInfo] = useState(false);
+  const [reportInfoDraft, setReportInfoDraft] = useState(DEFAULT_REPORT_INFO_NOTE);
+  const [reportInfoNote, setReportInfoNote] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_REPORT_INFO_NOTE;
+    return window.localStorage.getItem(REPORT_INFO_NOTE_STORAGE_KEY) || DEFAULT_REPORT_INFO_NOTE;
+  });
   const [reportSubTab, setReportSubTab] = useState('Valuation');
   const [selectedAssumptionCategory, setSelectedAssumptionCategory] = useState('Weighted Tables');
   const [selectedCompSet, setSelectedCompSet] = useState(COMPARABLE_SETS[0].id);
@@ -141,6 +375,133 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
 
   const handleAssumptionManualChange = (key: string, value: string) => {
     setAssumptionManualValues(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleStartAssumptionInfoEdit = () => {
+    setAssumptionInfoDraft(assumptionInfoNote);
+    setIsEditingAssumptionInfo(true);
+  };
+
+  const handleSaveAssumptionInfoEdit = () => {
+    setAssumptionInfoNote(assumptionInfoDraft);
+    window.localStorage.setItem(ASSUMPTION_INFO_NOTE_STORAGE_KEY, assumptionInfoDraft);
+    setIsEditingAssumptionInfo(false);
+  };
+
+  const handleCancelAssumptionInfoEdit = () => {
+    setAssumptionInfoDraft(assumptionInfoNote);
+    setIsEditingAssumptionInfo(false);
+  };
+
+  const handleStartDashboardInfoEdit = () => {
+    setDashboardInfoDraft(dashboardInfoNote);
+    setIsEditingDashboardInfo(true);
+  };
+
+  const handleSaveDashboardInfoEdit = () => {
+    setDashboardInfoNote(dashboardInfoDraft);
+    window.localStorage.setItem(DASHBOARD_INFO_NOTE_STORAGE_KEY, dashboardInfoDraft);
+    setIsEditingDashboardInfo(false);
+  };
+
+  const handleCancelDashboardInfoEdit = () => {
+    setDashboardInfoDraft(dashboardInfoNote);
+    setIsEditingDashboardInfo(false);
+  };
+
+  const handleStartMarketCompsInfoEdit = () => {
+    setMarketCompsInfoDraft(marketCompsInfoNote);
+    setIsEditingMarketCompsInfo(true);
+  };
+
+  const handleSaveMarketCompsInfoEdit = () => {
+    setMarketCompsInfoNote(marketCompsInfoDraft);
+    window.localStorage.setItem(MARKET_COMPS_INFO_NOTE_STORAGE_KEY, marketCompsInfoDraft);
+    setIsEditingMarketCompsInfo(false);
+  };
+
+  const handleCancelMarketCompsInfoEdit = () => {
+    setMarketCompsInfoDraft(marketCompsInfoNote);
+    setIsEditingMarketCompsInfo(false);
+  };
+
+  const handleStartRiskAnalysisInfoEdit = () => {
+    setRiskAnalysisInfoDraft(riskAnalysisInfoNote);
+    setIsEditingRiskAnalysisInfo(true);
+  };
+
+  const handleSaveRiskAnalysisInfoEdit = () => {
+    setRiskAnalysisInfoNote(riskAnalysisInfoDraft);
+    window.localStorage.setItem(RISK_ANALYSIS_INFO_NOTE_STORAGE_KEY, riskAnalysisInfoDraft);
+    setIsEditingRiskAnalysisInfo(false);
+  };
+
+  const handleCancelRiskAnalysisInfoEdit = () => {
+    setRiskAnalysisInfoDraft(riskAnalysisInfoNote);
+    setIsEditingRiskAnalysisInfo(false);
+  };
+
+  const handleStartReportInfoEdit = () => {
+    setReportInfoDraft(reportInfoNote);
+    setIsEditingReportInfo(true);
+  };
+
+  const handleSaveReportInfoEdit = () => {
+    setReportInfoNote(reportInfoDraft);
+    window.localStorage.setItem(REPORT_INFO_NOTE_STORAGE_KEY, reportInfoDraft);
+    setIsEditingReportInfo(false);
+  };
+
+  const handleCancelReportInfoEdit = () => {
+    setReportInfoDraft(reportInfoNote);
+    setIsEditingReportInfo(false);
+  };
+
+  const renderAssumptionInfoNote = (note: string) => {
+    const headingLabels = [
+      'What is this tab',
+      'What is this tab (Functional)',
+      'Input Sources',
+      'Used in (Functional Usage )',
+      'In simple terms:',
+      'It is used to:',
+      'It includes inputs related to:',
+      'Dates / 2025 Projections',
+      'Historical Financial Weighting',
+      'Valuation Methodology Weighting',
+      'Adjustments (General)',
+      'Rent Adjustment',
+      "Owner's Compensation Adjustments",
+      'Discretionary Personal Expenses',
+      'One-time Revenue / Expense Adjustments',
+      'Comparable Company Adjustments',
+      'Excluded Assets',
+      'Excess / Insufficient Cash',
+      'Acquisition Stake Summary',
+      'Risk Assessment / CSRP Error',
+      'Input Source:',
+      'Used In:'
+    ];
+
+    return note.split('\n').map((line, index) => {
+      const trimmedLine = line.trim();
+      const isHeading = headingLabels.includes(trimmedLine);
+      const isBullet = trimmedLine.startsWith('- ');
+
+      if (!trimmedLine) {
+        return <div key={index} className="h-2" />;
+      }
+
+      if (isHeading) {
+        return <p key={index} className="font-semibold text-gray-800">{trimmedLine}</p>;
+      }
+
+      if (isBullet) {
+        return <p key={index} className="pl-4 text-gray-700">{trimmedLine}</p>;
+      }
+
+      return <p key={index} className="text-gray-700">{line}</p>;
+    });
   };
 
   const handleCompsSheetUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2326,20 +2687,444 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col h-full">
+      {isAssumptionInfoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assumption-info-title"
+            className="flex h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50 shadow-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-emerald-700 shrink-0" />
+                <p id="assumption-info-title" className="text-xs sm:text-sm font-bold text-emerald-900">Assumption</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {isEditingAssumptionInfo ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveAssumptionInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Save Assumption note"
+                      title="Save note"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelAssumptionInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Cancel Assumption note edit"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartAssumptionInfoEdit}
+                    className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    aria-label="Edit Assumption note"
+                    title="Edit note"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAssumptionInfoOpen(false);
+                    setIsEditingAssumptionInfo(false);
+                  }}
+                  className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  aria-label="Close Assumption information"
+                  title="Close"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+              {isEditingAssumptionInfo ? (
+                <textarea
+                  value={assumptionInfoDraft}
+                  onChange={(e) => setAssumptionInfoDraft(e.target.value)}
+                  className="h-full min-h-[56vh] w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-[11px] sm:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none leading-relaxed"
+                />
+              ) : (
+                <div className="space-y-1 text-[11px] sm:text-xs leading-relaxed">
+                  {renderAssumptionInfoNote(assumptionInfoNote)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDashboardInfoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-info-title"
+            className="flex h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50 shadow-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-emerald-700 shrink-0" />
+                <p id="dashboard-info-title" className="text-xs sm:text-sm font-bold text-emerald-900">Dashboard</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {isEditingDashboardInfo ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveDashboardInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Save Dashboard note"
+                      title="Save note"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelDashboardInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Cancel Dashboard note edit"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartDashboardInfoEdit}
+                    className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    aria-label="Edit Dashboard note"
+                    title="Edit note"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDashboardInfoOpen(false);
+                    setIsEditingDashboardInfo(false);
+                  }}
+                  className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  aria-label="Close Dashboard information"
+                  title="Close"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+              {isEditingDashboardInfo ? (
+                <textarea
+                  value={dashboardInfoDraft}
+                  onChange={(e) => setDashboardInfoDraft(e.target.value)}
+                  className="h-full min-h-[56vh] w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-[11px] sm:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none leading-relaxed"
+                />
+              ) : (
+                <div className="space-y-1 text-[11px] sm:text-xs leading-relaxed">
+                  {renderAssumptionInfoNote(dashboardInfoNote)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMarketCompsInfoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="market-comps-info-title"
+            className="flex h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50 shadow-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-emerald-700 shrink-0" />
+                <p id="market-comps-info-title" className="text-xs sm:text-sm font-bold text-emerald-900">Market Comps</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {isEditingMarketCompsInfo ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveMarketCompsInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Save Market Comps note"
+                      title="Save note"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelMarketCompsInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Cancel Market Comps note edit"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartMarketCompsInfoEdit}
+                    className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    aria-label="Edit Market Comps note"
+                    title="Edit note"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMarketCompsInfoOpen(false);
+                    setIsEditingMarketCompsInfo(false);
+                  }}
+                  className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  aria-label="Close Market Comps information"
+                  title="Close"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+              {isEditingMarketCompsInfo ? (
+                <textarea
+                  value={marketCompsInfoDraft}
+                  onChange={(e) => setMarketCompsInfoDraft(e.target.value)}
+                  className="h-full min-h-[56vh] w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-[11px] sm:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none leading-relaxed"
+                />
+              ) : (
+                <div className="space-y-1 text-[11px] sm:text-xs leading-relaxed">
+                  {renderAssumptionInfoNote(marketCompsInfoNote)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isRiskAnalysisInfoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="risk-analysis-info-title"
+            className="flex h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50 shadow-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-emerald-700 shrink-0" />
+                <p id="risk-analysis-info-title" className="text-xs sm:text-sm font-bold text-emerald-900">Risk Analysis</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {isEditingRiskAnalysisInfo ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveRiskAnalysisInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Save Risk Analysis note"
+                      title="Save note"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelRiskAnalysisInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Cancel Risk Analysis note edit"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartRiskAnalysisInfoEdit}
+                    className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    aria-label="Edit Risk Analysis note"
+                    title="Edit note"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRiskAnalysisInfoOpen(false);
+                    setIsEditingRiskAnalysisInfo(false);
+                  }}
+                  className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  aria-label="Close Risk Analysis information"
+                  title="Close"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+              {isEditingRiskAnalysisInfo ? (
+                <textarea
+                  value={riskAnalysisInfoDraft}
+                  onChange={(e) => setRiskAnalysisInfoDraft(e.target.value)}
+                  className="h-full min-h-[56vh] w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-[11px] sm:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none leading-relaxed"
+                />
+              ) : (
+                <div className="space-y-1 text-[11px] sm:text-xs leading-relaxed">
+                  {renderAssumptionInfoNote(riskAnalysisInfoNote)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isReportInfoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="report-info-title"
+            className="flex h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50 shadow-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-3 sm:px-4">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-emerald-700 shrink-0" />
+                <p id="report-info-title" className="text-xs sm:text-sm font-bold text-emerald-900">Report</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {isEditingReportInfo ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveReportInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Save Report note"
+                      title="Save note"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelReportInfoEdit}
+                      className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      aria-label="Cancel Report note edit"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartReportInfoEdit}
+                    className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                    aria-label="Edit Report note"
+                    title="Edit note"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReportInfoOpen(false);
+                    setIsEditingReportInfo(false);
+                  }}
+                  className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  aria-label="Close Report information"
+                  title="Close"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+              {isEditingReportInfo ? (
+                <textarea
+                  value={reportInfoDraft}
+                  onChange={(e) => setReportInfoDraft(e.target.value)}
+                  className="h-full min-h-[56vh] w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-[11px] sm:text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none leading-relaxed"
+                />
+              ) : (
+                <div className="space-y-1 text-[11px] sm:text-xs leading-relaxed">
+                  {renderAssumptionInfoNote(reportInfoNote)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Grid Toolbar */}
       <div className="p-3 border-b border-gray-100">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-1 p-1 bg-gray-50 rounded-lg overflow-x-auto no-scrollbar whitespace-nowrap">
             {VALUATION_TABS.map(tab => (
-              <button
+              <div
                 key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap ${
                   activeTab === tab ? 'bg-[#2a433a] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {tab}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className="cursor-pointer"
+                >
+                  {tab}
+                </button>
+                {(tab === 'Assumption' || tab === 'Dashboard' || tab === 'Market Comps' || tab === 'Risk Analysis' || tab === 'Report') && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveTab(tab);
+                      if (tab === 'Assumption') {
+                        setIsAssumptionInfoOpen(true);
+                      } else if (tab === 'Dashboard') {
+                        setIsDashboardInfoOpen(true);
+                      } else if (tab === 'Market Comps') {
+                        setIsMarketCompsInfoOpen(true);
+                      } else if (tab === 'Risk Analysis') {
+                        setIsRiskAnalysisInfoOpen(true);
+                      } else {
+                        setIsReportInfoOpen(true);
+                      }
+                    }}
+                    className={`p-0.5 rounded-full transition-colors ${
+                      activeTab === tab
+                        ? 'text-white/90 hover:bg-white/10'
+                        : 'text-gray-500 hover:bg-gray-200'
+                    }`}
+                    aria-label={`Show ${tab} information`}
+                    title="What this tab means and data flow"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
           
