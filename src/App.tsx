@@ -21,7 +21,7 @@ function App() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col h-full gap-0.5 max-w-full lg:max-w-[1600px] mx-auto px-2 md:px-0">
+      <div className="flex flex-col h-full gap-0.5 max-w-full lg:max-w-[1600px] mx-auto px-1 md:px-0">
         <DashboardHeader activeTab={activeWorkflowTab} onTabChange={setActiveWorkflowTab} />
         <div className="flex-1 min-h-0">
           {renderContent()}
