@@ -270,6 +270,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
     return window.localStorage.getItem(REPORT_INFO_NOTE_STORAGE_KEY) || DEFAULT_REPORT_INFO_NOTE;
   });
   const [reportSubTab, setReportSubTab] = useState('Valuation');
+  const [activePreRiskTab, setActivePreRiskTab] = useState('sba');
   const [selectedAssumptionCategory, setSelectedAssumptionCategory] = useState('Weighted Tables');
   const [selectedCompSet, setSelectedCompSet] = useState(COMPARABLE_SETS[0].id);
   const [expandedRatioGroups, setExpandedRatioGroups] = useState<string[]>([]);
@@ -1393,6 +1394,12 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
   };
 
   const renderRiskAnalysisTab = () => {
+    const preRiskTabs = [
+      { id: 'sba', title: 'SBA Loan Default', helper: 'Loan history and charge-off scorecard' },
+      { id: 'carbon', title: 'Carbon Emissions', helper: 'Environmental inputs and risk write-up' },
+      { id: 'tariff', title: 'Tariff Exposure', helper: 'Materials, industry exposure, and tariff impact' },
+    ];
+
     const sections = [
       { id: 'sba', title: 'SBA Loan Default', data: RISK_ASSESSMENT_DATA.sbaLoanDefault },
       { id: 'mgmt', title: 'Management Team', data: RISK_ASSESSMENT_DATA.managementTeam },
@@ -1415,7 +1422,32 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
             </h2>
           </div>
 
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              {preRiskTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActivePreRiskTab(tab.id)}
+                  className={`text-left rounded-lg px-4 py-3 border transition-all ${
+                    activePreRiskTab === tab.id
+                      ? 'bg-[#2a433a] text-white border-[#2a433a] shadow-sm'
+                      : 'bg-white text-gray-500 border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="block text-[11px] font-black uppercase tracking-widest">{tab.title}</span>
+                  <span className={`block text-[10px] font-medium mt-1 leading-tight ${
+                    activePreRiskTab === tab.id ? 'text-white/70' : 'text-gray-400'
+                  }`}>
+                    {tab.helper}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Section 4: Carbon Data Analysis */}
+          {activePreRiskTab === 'carbon' && (
           <div className="order-last bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
               <div>
@@ -1518,8 +1550,10 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
               )}
             </div>
           </div>
+          )}
 
           {/* Section 5: Tariff Data Analysis */}
+          {activePreRiskTab === 'tariff' && (
           <div className="order-last bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
               <div>
@@ -1716,7 +1750,9 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
               )}
             </div>
           </div>
+          )}
 
+          {activePreRiskTab === 'sba' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Section 2: Loan & Comp Context Info */}
             <div className="lg:col-span-1 space-y-4">
@@ -1840,6 +1876,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
               </div>
             </div>
           </div>
+          )}
         </section>
 
         {/* Risk Assessment Section */}
@@ -2142,56 +2179,14 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
 
   const renderReportValuationSubTab = () => {
     return (
-      <div className="space-y-6 p-4 bg-gray-50/30">
-        {/* Particulars Section */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
-            Particulars
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Valuation Methodology Weighting</h3>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  {REPORT_VALUATION_DATA.assumptions.weightage.map((item, i) => (
-                    <div key={i} className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg">
-                      <span className="text-xs font-bold text-gray-700">{item.item}</span>
-                      <span className="text-sm font-black text-[#2a433a]">{item.value}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between items-center p-2.5 bg-gray-50 rounded-lg">
-                    <span className="text-xs font-bold text-gray-700">Market</span>
-                    <span className="text-sm font-black text-emerald-600">50%</span>
-                  </div>
-                </div>
-                <div className="p-3 bg-emerald-50/30 border border-emerald-100 rounded-lg">
-                  <p className="text-xs text-gray-600 leading-relaxed italic">
-                    {REPORT_VALUATION_DATA.assumptions.explanation}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Key Links & Navigation</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {REPORT_VALUATION_DATA.particulars.assumptions.map((item, i) => (
-                  <a key={i} href={`#rangeid=${item.linkId}`} className="flex items-center justify-between p-2.5 bg-gray-50 hover:bg-emerald-50 rounded-lg group transition-all">
-                    <span className="text-xs font-bold text-gray-600 group-hover:text-emerald-700">{item.label}</span>
-                    <TrendingUp className="w-3 h-3 text-gray-300 group-hover:text-emerald-500" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)] gap-6 p-4 bg-gray-50/30">
+        <div className="space-y-6 order-2 xl:pl-6">
 
         {/* Growth Rate Factors Table */}
         <section className="space-y-3" id="rangeid=702796264">
           <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
             <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
-            Growth Rate Factors
+            Growth Rate Assumptions
           </h2>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left text-xs">
@@ -2227,7 +2222,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
         <section className="space-y-3" id="rangeid=2060461216">
           <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
             <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
-            Additional Assumptions
+            Valuation Assumptions
           </h2>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left text-xs">
@@ -2259,7 +2254,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
         <section className="space-y-3" id="rangeid=110747471">
           <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
             <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
-            Weighted Assumptions
+            Weightage Assumptions
           </h2>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left text-xs">
@@ -2285,7 +2280,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
         <section className="space-y-3">
           <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2" id="rangeid=1237347067">
             <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
-            Final Metrics Assumptions
+            Final Metrics Assumption
           </h2>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left text-xs">
@@ -2308,6 +2303,9 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
             </table>
           </div>
         </section>
+        </div>
+
+        <div className="space-y-6 order-1 xl:pr-6 xl:border-r xl:border-gray-200">
 
         {/* WACC Section */}
         <section className="space-y-3">
@@ -2374,7 +2372,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
         <section className="space-y-3">
           <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2" id="rangeid=1071212953">
             <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
-            DCF Valuation Section
+            DCF Valuation
           </h2>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto no-scrollbar">
@@ -2435,7 +2433,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
         <section className="space-y-3">
           <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2" id="rangeid=343936829">
             <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
-            Relative Valuation Section
+            Relative Valuation
           </h2>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left text-xs">
@@ -2518,6 +2516,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
             </div>
           </div>
         </section>
+        </div>
       </div>
     );
   };
@@ -2615,18 +2614,24 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
         return (
           <div className="p-4 space-y-6 overflow-y-auto h-full no-scrollbar">
             <div className="bg-white rounded-lg border border-gray-100 shadow-sm">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                <div className="flex-1 max-w-md relative">
-                  <select 
-                    value={selectedAssumptionCategory}
-                    onChange={(e) => setSelectedAssumptionCategory(e.target.value)}
-                    className="w-full appearance-none pl-4 pr-10 py-2 bg-white border border-gray-200 rounded-md text-xs font-bold text-[#2a433a] focus:outline-none focus:ring-2 focus:ring-[#2a433a]/20 cursor-pointer shadow-sm transition-all hover:border-gray-300"
-                  >
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4 bg-gray-50/50">
+                <div className="flex-1 overflow-x-auto no-scrollbar">
+                  <div className="inline-flex items-center gap-1.5 min-w-max rounded-lg bg-white border border-gray-100 p-1 shadow-sm">
                     {Object.keys(ASSUMPTION_CATEGORIES).map(category => (
-                      <option key={category} value={category}>{category}</option>
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => setSelectedAssumptionCategory(category)}
+                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                          selectedAssumptionCategory === category
+                            ? 'bg-[#2a433a] text-white shadow-sm'
+                            : 'text-gray-500 hover:text-[#2a433a] hover:bg-gray-50'
+                        }`}
+                      >
+                        {category}
+                      </button>
                     ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
                 <button className="text-xs text-[#2a433a] font-bold hover:underline px-4">Edit Table</button>
               </div>
@@ -2655,13 +2660,6 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                 {renderAdjustedIncomeTable()}
                 <div className="space-y-6">
                   {renderWeightedIncomeTable()}
-                  <div className="mt-8">
-                    {renderTableWithWrapper('Historical Financial Weighting')}
-                    {renderExplanationField("Explanation", weightedExplanation, setWeightedExplanation)}
-                    {renderTableWithWrapper('Valuation Methodology Weighting')}
-                    {renderExplanationField("Explaination", onboardingExplanation, setOnboardingExplanation)}
-                    {renderTableWithWrapper('2025 Projections')}
-                  </div>
                 </div>
                 {renderAdjustedBookValueTable()}
                 {renderGoodwillCalculationTable()}

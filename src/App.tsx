@@ -5,12 +5,12 @@ import { FinancialGrid } from './components/FinancialGrid';
 import { ValuationGrid } from './components/ValuationGrid';
 
 function App() {
-  const [activeWorkflowTab, setActiveWorkflowTab] = useState('Financial Analysis');
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState('Financial Review');
   const [projectedCommonSizingBasisLabel, setProjectedCommonSizingBasisLabel] = useState('Average');
 
   const renderContent = () => {
     switch (activeWorkflowTab) {
-      case 'Financial Analysis':
+      case 'Financial Review':
         return <FinancialGrid onProjectedCommonSizingBasisChange={setProjectedCommonSizingBasisLabel} />;
       case 'Valuation':
         return <ValuationGrid projectedCommonSizingBasisLabel={projectedCommonSizingBasisLabel} />;

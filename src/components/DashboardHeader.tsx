@@ -74,7 +74,7 @@ const Stepper = () => {
 
 const WorkflowTabs = ({ activeTab, onTabChange }: WorkflowTabsProps) => {
   const tabs = [
-    { number: 1, name: 'Financial Analysis' },
+    { number: 1, name: 'Financial Review' },
     { number: 2, name: 'Valuation' },
   ];
 
