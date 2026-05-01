@@ -18,6 +18,13 @@ import { MOCK_DATA, INCOME_DATA, PROFORMA_COLUMNS, INCOME_COLUMNS, FinancialRow,
 
 const INFO_NOTE_OVERRIDES_STORAGE_KEY = 'valueBuddy.financialGridInfoNotes.v3';
 
+type ProformaAdjustmentEdit = {
+  mode: 'factor' | 'adjustment';
+  draft?: string;
+  factor?: number;
+  adjustment?: number;
+};
+
 const DEFAULT_INFO_NOTE_TEXT: Record<string, string> = {
   'Proforma Balance Sheet': `This tab shows the projected financial position of the business in the future. It is not only historical data; it is calculated from projected income and balance sheet adjustments.
 
@@ -114,20 +121,39 @@ Where this data is used
 - Market Comparison (Comps) -> used for benchmarking against similar businesses`
 };
 
-const Row = ({ row, expandedRows, toggleRow, columns, level = 0, latestYear, includedValues, onIncludedValueChange, isProforma }: { 
+const Row = ({
+  row,
+  expandedRows,
+  toggleRow,
+  columns,
+  level = 0,
+  includedValues,
+  onIncludedValueChange,
+  isProforma,
+  adjustmentEdits,
+  onAdjustmentEditChange,
+  projectedNetReceipts,
+  onProjectedNetReceiptsChange
+}: {
   row: FinancialRow, 
   expandedRows: Set<string>, 
   toggleRow: (id: string) => void,
   columns: YearColumn[],
   level?: number,
-  latestYear: string,
   includedValues: Record<string, string>,
   onIncludedValueChange: (id: string, value: string) => void,
-  isProforma: boolean
+  isProforma: boolean,
+  adjustmentEdits: Record<string, ProformaAdjustmentEdit>,
+  onAdjustmentEditChange: (id: string, mode: 'factor' | 'adjustment', value: string) => void,
+  projectedNetReceipts: string,
+  onProjectedNetReceiptsChange: (value: string) => void
 }) => {
   const isExpanded = expandedRows.has(row.id);
   const hasChildren = row.children && row.children.length > 0;
   const isDocumentRow = level === 4;
+  const isTotalLikeRow = row.name.toLowerCase().includes('total') || row.id === 'variance' || row.id === 'tangible-net-worth';
+  const canEditProformaAdjustment = isProforma && !isTotalLikeRow;
+  const adjustmentEditMode = adjustmentEdits[row.id]?.mode;
 
   const getRowStyle = () => {
     if (row.name.toLowerCase().includes('total') || row.name.toLowerCase().includes('net')) {
@@ -177,16 +203,40 @@ const Row = ({ row, expandedRows, toggleRow, columns, level = 0, latestYear, inc
                   <select 
                     value={includedInValue}
                     onChange={(e) => onIncludedValueChange(row.id, e.target.value)}
-                    className="bg-white border border-gray-200 rounded px-2 py-1 text-[11px] font-semibold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer hover:border-emerald-300 w-full max-w-[70px]"
+                    disabled={isTotalLikeRow}
+                    className={`bg-white border border-gray-200 rounded px-2 py-1 text-[11px] font-semibold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all w-full max-w-[70px] ${
+                      isTotalLikeRow ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-emerald-300'
+                    }`}
                   >
                     <option value="Yes">Yes</option>
                     <option value="No">No</option>
                     <option value="-">-</option>
                   </select>
-                ) : isProforma && isAdjustmentFactor ? (
-                  <span className="font-semibold text-gray-700">
-                    {includedInValue === '-' ? '0%' : `${val}%`}
-                  </span>
+                ) : isProforma && (col.year === 'adjustment_factor' || col.year === 'adjustment') && canEditProformaAdjustment ? (
+                  <input
+                    type="number"
+                    value={adjustmentEditMode === 'factor' && col.year === 'adjustment_factor'
+                      ? adjustmentEdits[row.id]?.draft ?? ''
+                      : adjustmentEditMode === 'adjustment' && col.year === 'adjustment'
+                        ? adjustmentEdits[row.id]?.draft ?? ''
+                        : typeof val === 'number'
+                          ? Number(val.toFixed(2))
+                          : ''}
+                    onChange={(e) => onAdjustmentEditChange(row.id, col.year === 'adjustment_factor' ? 'factor' : 'adjustment', e.target.value)}
+                    disabled={(col.year === 'adjustment_factor' && adjustmentEditMode === 'adjustment') || (col.year === 'adjustment' && adjustmentEditMode === 'factor')}
+                    className="w-full max-w-[112px] rounded border border-gray-200 bg-white px-2 py-1 text-right text-[11px] font-semibold text-gray-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-white disabled:text-gray-700 disabled:opacity-100"
+                    step={col.year === 'adjustment_factor' ? '0.01' : '1'}
+                    title={col.year === 'adjustment_factor' ? 'Edit adjustment factor percentage' : 'Edit adjustment amount'}
+                  />
+                ) : !isProforma && row.id === 'net-receipts' && col.year === 'projections' ? (
+                  <input
+                    type="number"
+                    value={projectedNetReceipts}
+                    onChange={(e) => onProjectedNetReceiptsChange(e.target.value)}
+                    className="w-full max-w-[120px] rounded border border-gray-200 bg-white px-2 py-1 text-right text-[11px] font-semibold text-gray-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                    step="1"
+                    title="Edit projected Net Receipts or Sales"
+                  />
                 ) : val === '-' || val === '' || (isNumeric && val === 0 && !isAdjustmentColumn) ? (
                   <span className="text-gray-300">-</span>
                 ) : isNumeric ? (
@@ -213,10 +263,13 @@ const Row = ({ row, expandedRows, toggleRow, columns, level = 0, latestYear, inc
           toggleRow={toggleRow} 
           columns={columns} 
           level={level + 1} 
-          latestYear={latestYear}
           includedValues={includedValues}
           onIncludedValueChange={onIncludedValueChange}
           isProforma={isProforma}
+          adjustmentEdits={adjustmentEdits}
+          onAdjustmentEditChange={onAdjustmentEditChange}
+          projectedNetReceipts={projectedNetReceipts}
+          onProjectedNetReceiptsChange={onProjectedNetReceiptsChange}
         />
       ))}
     </>
@@ -240,11 +293,13 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
       return {};
     }
   });
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set(['assets-group', 'total-current-assets', 'cash-equivalents', 'inventory-group', 'liabilities-group', 'equity-group']));
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set(['assets-group', 'total-current-assets', 'cash-equivalents', 'inventory-group', 'liabilities-group', 'equity-group', 'revenue-group']));
   const [latestYear, setLatestYear] = useState('interim');
   const [includedValues, setIncludedValues] = useState<Record<string, string>>({});
-  const [commonSizingAverageBasis, setCommonSizingAverageBasis] = useState('all');
+  const [adjustmentEdits, setAdjustmentEdits] = useState<Record<string, ProformaAdjustmentEdit>>({});
+  const commonSizingAverageBasis = 'all';
   const [projectedCommonSizingBasis, setProjectedCommonSizingBasis] = useState('cs_avg');
+  const [projectedNetReceipts, setProjectedNetReceipts] = useState('2098300.64');
   const [ttmBaseYear, setTtmBaseYear] = useState('tr3');
   const [isDocumentPanelOpen, setIsDocumentPanelOpen] = useState(false);
 
@@ -274,6 +329,31 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
 
   const handleIncludedValueChange = (id: string, value: string) => {
     setIncludedValues(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleAdjustmentEditChange = (id: string, mode: 'factor' | 'adjustment', value: string) => {
+    setAdjustmentEdits(prev => {
+      if (value === '') {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+
+      const numericValue = Number(value);
+      if (Number.isNaN(numericValue)) {
+        return {
+          ...prev,
+          [id]: { mode, draft: value }
+        };
+      }
+
+      return {
+        ...prev,
+        [id]: mode === 'factor'
+          ? { mode, factor: numericValue, draft: value }
+          : { mode, adjustment: numericValue, draft: value }
+      };
+    });
   };
 
   const handleProjectedCommonSizingBasisChange = (value: string) => {
@@ -314,6 +394,7 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
         return interimValue + (selectedYearValue * remainingDays / (ttmDaysByYear[ttmBaseYear] || 365));
       };
 
+      const projectedNetReceiptsValue = projectedNetReceipts.trim() === '' ? NaN : Number(projectedNetReceipts);
       const revenueRow = activeData.find(row => row.id === 'revenue-group');
       const revenueTtm = revenueRow ? calculateTtm(revenueRow.values) : 0;
       const revenueTtmValue = typeof revenueTtm === 'number' ? revenueTtm : 0;
@@ -324,6 +405,10 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
         const isMetadataRow = row.id.startsWith('meta-');
 
         if (!isMetadataRow) {
+          if (row.id === 'net-receipts' && !Number.isNaN(projectedNetReceiptsValue)) {
+            values.projections = projectedNetReceiptsValue;
+          }
+
           values.cs_avg = averageNumericValues(values, commonSizingAverageColumns);
           values.cs6 = values[projectedCommonSizingBasis] ?? values.cs6;
           values.ttm = calculateTtm(values);
@@ -346,16 +431,27 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
     const processRow = (row: FinancialRow): FinancialRow => {
       const incl = includedValues[row.id] || (row.values['included_in_value'] as string) || 'Yes';
       const lVal = (row.values[latestYear] as number) || 0;
+      const manualEdit = adjustmentEdits[row.id];
       
       // Dynamic factor: Yes -> 0%, No -> 100%
-      const currentFactorValue = incl === 'Yes' ? 0 : (incl === 'No' ? 100 : 0);
+      let currentFactorValue = incl === 'Yes' ? 0 : (incl === 'No' ? 100 : 0);
       
       let adjustment = 0;
       let children: FinancialRow[] = [];
+      const rowIsTotalLike = row.name.toLowerCase().includes('total') || row.id === 'variance' || row.id === 'tangible-net-worth';
 
       if (row.children && row.children.length > 0) {
         children = row.children.map(processRow);
-        // Parent row: sum of children adjustments
+      }
+
+      if (manualEdit?.mode === 'factor' && !rowIsTotalLike) {
+        currentFactorValue = manualEdit.factor ?? currentFactorValue;
+        adjustment = lVal * (currentFactorValue / 100) * -1;
+      } else if (manualEdit?.mode === 'adjustment' && !rowIsTotalLike) {
+        adjustment = manualEdit.adjustment ?? 0;
+        currentFactorValue = lVal === 0 ? 0 : (adjustment / lVal) * -100;
+      } else if (children.length > 0) {
+        // Parent and total rows default to the sum of their children.
         adjustment = children.reduce((sum, child) => sum + (child.values['adjustment'] as number || 0), 0);
       } else {
         // Leaf row: logic
@@ -419,7 +515,7 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
     }
 
     return data;
-  }, [activeData, isProforma, includedValues, latestYear, commonSizingAverageBasis, projectedCommonSizingBasis, ttmBaseYear]);
+  }, [activeData, isProforma, includedValues, adjustmentEdits, latestYear, commonSizingAverageBasis, projectedCommonSizingBasis, projectedNetReceipts, ttmBaseYear]);
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows);
@@ -884,18 +980,6 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
                           <option value="interim">Interim (2025)</option>
                         </select>
                       )}
-                      {!isProforma && col.year === 'cs_avg' && (
-                        <select
-                          value={commonSizingAverageBasis}
-                          onChange={(e) => setCommonSizingAverageBasis(e.target.value)}
-                          className="bg-white border border-gray-200 rounded px-2 py-1 text-[10px] normal-case font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer shadow-sm transition-all hover:border-emerald-300 max-w-[110px]"
-                          title="Select common sizing years for average"
-                        >
-                          {commonSizingAverageOptions.map(option => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      )}
                       {!isProforma && col.year === 'cs6' && (
                         <select
                           value={projectedCommonSizingBasis}
@@ -936,10 +1020,13 @@ export const FinancialGrid = ({ onProjectedCommonSizingBasisChange }: FinancialG
                 expandedRows={expandedRows} 
                 toggleRow={toggleRow} 
                 columns={activeColumns} 
-                latestYear={latestYear}
                 includedValues={includedValues}
                 onIncludedValueChange={handleIncludedValueChange}
                 isProforma={isProforma}
+                adjustmentEdits={adjustmentEdits}
+                onAdjustmentEditChange={handleAdjustmentEditChange}
+                projectedNetReceipts={projectedNetReceipts}
+                onProjectedNetReceiptsChange={setProjectedNetReceipts}
               />
             ))}
             {/* Fill space */}

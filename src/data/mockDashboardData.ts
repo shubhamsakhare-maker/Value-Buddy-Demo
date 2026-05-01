@@ -49,9 +49,9 @@ export const RATIO_ANALYSIS_DATA = [
       { ratio: 'Net Profit Margin', '2022': '19.42%', '2023': '28.58%', '2024': '27.60%', interim: '36.94%', average: '0.28' },
       { ratio: 'EBITDA Margin', '2022': '0.21', '2023': '0.30', '2024': '0.29', interim: '0.37', average: '0.30' },
       { ratio: 'SDE Margin', '2022': '0.26', '2023': '0.35', '2024': '0.34', interim: '0.37', average: '0.34' },
-      { ratio: 'Rent/Sales', '2022': '0.07', '2023': '0.07', '2024': '0.08', interim: '0.07', average: '0.07', isOptional: true },
-      { ratio: 'COGS/Sales', '2022': '0.00', '2023': '0.00', '2024': '0.00', interim: '0.00', average: '0.00', isOptional: true },
-      { ratio: 'Premises & Property Expense / Net Sales', '2022': '0.08', '2023': '0.08', '2024': '0.08', interim: '0.08', average: '-', isOptional: true },
+      { ratio: 'Rent/Sales', '2022': '0.07', '2023': '0.07', '2024': '0.08', interim: '0.07', average: '0.07' },
+      { ratio: 'COGS/Sales', '2022': '0.00', '2023': '0.00', '2024': '0.00', interim: '0.00', average: '0.00' },
+      { ratio: 'Premises & Property Expense / Net Sales', '2022': '0.08', '2023': '0.08', '2024': '0.08', interim: '0.08', average: '-' },
       { ratio: 'Tax Rate', '2022': '0.00', '2023': '0.00', '2024': '0.00', interim: '0.00', average: '0.00' },
       { ratio: 'Return on Equity', '2022': '0.80', '2023': '0.97', '2024': '1.61', interim: '0.93', average: '1.16' },
       { ratio: 'Return on Assets', '2022': '0.80', '2023': '0.97', '2024': '1.61', interim: '0.93', average: '1.16' },
@@ -117,4 +117,3 @@ export const GOODWILL_CALCULATION_DATA = [
   { label: 'Tangible Assets Assumed', value: '$216,737', source: 'Formula Driven', isBold: true },
   { label: 'Goodwill', value: '$1,780,263', source: 'Formula Driven', isBold: true, highlight: true },
 ];
-
