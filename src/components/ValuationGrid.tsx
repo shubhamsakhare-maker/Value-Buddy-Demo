@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { 
   FileText, 
+  FileSpreadsheet,
   Search, 
   Plus, 
   Save,
@@ -13,6 +14,7 @@ import {
   Pencil,
   Check,
   X,
+  UploadCloud,
 } from 'lucide-react';
 import { MOCK_ASSUMPTION_DATA } from '../data/mockAssumptionData';
 import { 
@@ -270,6 +272,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
     return window.localStorage.getItem(REPORT_INFO_NOTE_STORAGE_KEY) || DEFAULT_REPORT_INFO_NOTE;
   });
   const [reportSubTab, setReportSubTab] = useState('Valuation');
+  const [activeRiskAnalysisSection, setActiveRiskAnalysisSection] = useState('preRisk');
   const [activePreRiskTab, setActivePreRiskTab] = useState('sba');
   const [selectedAssumptionCategory, setSelectedAssumptionCategory] = useState('Weighted Tables');
   const [selectedCompSet, setSelectedCompSet] = useState(COMPARABLE_SETS[0].id);
@@ -293,9 +296,26 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
   const [tariffSourceLink, setTariffSourceLink] = useState(TARIFF_DATA_ANALYSIS.source);
   const [hasGeneratedTariffWriteUp, setHasGeneratedTariffWriteUp] = useState(false);
   const [isGeneratingTariff, setIsGeneratingTariff] = useState(false);
+  const [riskAssessmentWriteUps, setRiskAssessmentWriteUps] = useState<Record<string, string>>(() => ({
+    sba: RISK_ASSESSMENT_DATA.sbaLoanDefault.writeUp,
+    mgmt: RISK_ASSESSMENT_DATA.managementTeam.writeUp,
+    rev: RISK_ASSESSMENT_DATA.revenueStability.writeUp,
+    health: RISK_ASSESSMENT_DATA.financialHealth.writeUp,
+    comp: RISK_ASSESSMENT_DATA.competition.writeUp,
+    cust: RISK_ASSESSMENT_DATA.customerSatisfaction.writeUp,
+    supply: RISK_ASSESSMENT_DATA.supplyChain.writeUp,
+    esg: RISK_ASSESSMENT_DATA.esg.writeUp,
+    tariffImpact: RISK_ASSESSMENT_DATA.tariff.writeUp,
+  }));
+  const [editingRiskWriteUps, setEditingRiskWriteUps] = useState<Record<string, boolean>>({});
+  const [refiningRiskWriteUps, setRefiningRiskWriteUps] = useState<Record<string, boolean>>({});
   const [excludedAssetValues, setExcludedAssetValues] = useState<Record<string, string>>({});
   const [assumptionManualValues, setAssumptionManualValues] = useState<Record<string, string>>({});
+  const [assumptionDateValues, setAssumptionDateValues] = useState<Record<string, Date>>({});
+  const [openAssumptionSections, setOpenAssumptionSections] = useState<Record<string, boolean>>({});
   const [uploadedCompsSheet, setUploadedCompsSheet] = useState<{ name: string; rows: string[][] } | null>(null);
+  const [isCompsDragActive, setIsCompsDragActive] = useState(false);
+  const [isProcessingCompsSheet, setIsProcessingCompsSheet] = useState(false);
   const [reportManualAssumptions, setReportManualAssumptions] = useState<Record<string, string>>({
     'Borrower 0-5Y Net Income CAGR Forecast': '0%',
     'Adjusted Short-Term Growth Rate': '3.00%',
@@ -366,6 +386,33 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
     }, 500);
   };
 
+  const refineRiskWriteUpText = (text: string) =>
+    text
+      .split('\n')
+      .map(line => line.replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n\n');
+
+  const handleRiskWriteUpChange = (key: string, value: string) => {
+    setRiskAssessmentWriteUps(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleRefineRiskWriteUp = (key: string) => {
+    setRefiningRiskWriteUps(prev => ({ ...prev, [key]: true }));
+    window.setTimeout(() => {
+      setRiskAssessmentWriteUps(prev => ({
+        ...prev,
+        [key]: refineRiskWriteUpText(prev[key] ?? ''),
+      }));
+      setRefiningRiskWriteUps(prev => ({ ...prev, [key]: false }));
+    }, 500);
+  };
+
+  const handleCancelRiskWriteUpEdit = (key: string, originalValue: string) => {
+    setRiskAssessmentWriteUps(prev => ({ ...prev, [key]: originalValue }));
+    setEditingRiskWriteUps(prev => ({ ...prev, [key]: false }));
+  };
+
   const handleReportManualAssumptionChange = (item: string, value: string) => {
     setReportManualAssumptions(prev => ({ ...prev, [item]: value }));
   };
@@ -376,6 +423,32 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
 
   const handleAssumptionManualChange = (key: string, value: string) => {
     setAssumptionManualValues(prev => ({ ...prev, [key]: value }));
+  };
+
+  const toggleAssumptionSection = (tableName: string) => {
+    setOpenAssumptionSections(prev => ({ ...prev, [tableName]: !(prev[tableName] ?? true) }));
+  };
+
+  const handleAssumptionDateChange = (key: string, value: string) => {
+    const [year, month, day] = value.split('-').map(Number);
+    if (!year || !month || !day) return;
+    setAssumptionDateValues(prev => ({ ...prev, [key]: new Date(year, month - 1, day) }));
+  };
+
+  const getDateInputValue = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getAssumptionDate = (key: string, fallback: string) => {
+    const manualDate = assumptionDateValues[key];
+    if (manualDate) return manualDate;
+
+    const parsedDate = new Date(fallback);
+    if (Number.isNaN(parsedDate.getTime())) return new Date();
+    return parsedDate;
   };
 
   const handleStartAssumptionInfoEdit = () => {
@@ -505,9 +578,10 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
     });
   };
 
-  const handleCompsSheetUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const importCompsSheet = (file: File) => {
     if (!file) return;
+    setUploadedCompsSheet(null);
+    setIsProcessingCompsSheet(true);
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -517,12 +591,31 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
         .map(line => line.split(',').map(cell => cell.trim()))
         .filter(row => row.some(cell => cell.length > 0));
 
-      setUploadedCompsSheet({
-        name: file.name,
-        rows: rows.length > 0 ? rows : [[file.name, 'Uploaded file preview is available for CSV-style sheet content only.']]
-      });
+      window.setTimeout(() => {
+        setUploadedCompsSheet({
+          name: file.name,
+          rows: rows.length > 0 ? rows : [[file.name, 'Uploaded file preview is available for CSV-style sheet content only.']]
+        });
+        setIsProcessingCompsSheet(false);
+      }, 5000);
     };
+    reader.onerror = () => setIsProcessingCompsSheet(false);
     reader.readAsText(file);
+  };
+
+  const handleCompsSheetUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    importCompsSheet(file);
+    event.target.value = '';
+  };
+
+  const handleCompsSheetDrop = (event: React.DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setIsCompsDragActive(false);
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    importCompsSheet(file);
   };
 
   const parseCurrencyInput = (value: string) => {
@@ -624,17 +717,29 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
     </div>
   );
 
-  const renderTableWithWrapper = (tableName: string) => (
-    <div className="space-y-3 mb-6">
-      <h3 className="text-xs font-bold text-[#2a433a] uppercase tracking-wider flex items-center gap-2">
-        <span className="w-1 h-3 bg-emerald-500 rounded-full"></span>
-        {tableName}
-      </h3>
-      <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
-        {renderAssumptionTable(tableName)}
+  const renderTableWithWrapper = (tableName: string) => {
+    const isOpen = openAssumptionSections[tableName] ?? false;
+
+    return (
+      <div className="space-y-3 mb-6">
+        <button
+          type="button"
+          onClick={() => toggleAssumptionSection(tableName)}
+          className="text-xs font-bold text-[#2a433a] uppercase tracking-wider flex items-center gap-2"
+          aria-expanded={isOpen}
+        >
+          <span className="w-1 h-3 bg-emerald-500 rounded-full"></span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          {tableName}
+        </button>
+        {isOpen && (
+          <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+            {renderAssumptionTable(tableName)}
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderAdjustedIncomeTable = () => (
     <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
@@ -822,7 +927,9 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                       <td className="px-2 py-2 text-right">{item['2023']}</td>
                       <td className="px-2 py-2 text-right">{item['2024']}</td>
                       <td className="px-2 py-2 text-right text-gray-600">{item.interim}</td>
-                      <td className="px-3 py-2 text-right font-bold text-[#2a433a]">{item.average}</td>
+                      <td className="px-3 py-2 text-right font-bold text-[#2a433a]">
+                        {item.average !== '-' || item.ratio === 'Interest Coverage Ratio' ? item.average : ''}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -860,12 +967,24 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {Array.isArray(data) && data.map((row: any, i: number) => (
-                <tr key={i}>
-                  <td className="px-4 py-2.5 text-gray-700">{row.label}</td>
-                  <td className="px-4 py-2.5 font-medium">{row.value}</td>
-                </tr>
-              ))}
+              {Array.isArray(data) && data.map((row: any, i: number) => {
+                const dateKey = `dates-${row.label}`;
+                const dateValue = getAssumptionDate(dateKey, row.value);
+
+                return (
+                  <tr key={i}>
+                    <td className="px-4 py-2.5 text-gray-700">{row.label}</td>
+                    <td className="px-4 py-2.5 font-medium">
+                      <input
+                        type="date"
+                        value={getDateInputValue(dateValue)}
+                        onChange={(e) => handleAssumptionDateChange(dateKey, e.target.value)}
+                        className="w-full max-w-[180px] rounded border border-gray-200 bg-white px-2 py-1 text-xs font-semibold text-gray-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         );
@@ -1221,15 +1340,15 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
     return (
       <div className="p-4 space-y-6 overflow-y-auto h-full no-scrollbar bg-gray-50/30">
         {/* Comps Section */}
-        <section className="space-y-3">
+        <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
               <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
               Comps
             </h2>
-            <div className="flex items-center gap-3">
+            {(uploadedCompsSheet || isProcessingCompsSheet) && (
               <label className="px-3 py-1.5 bg-white border border-gray-200 rounded text-xs font-bold text-[#2a433a] hover:bg-gray-50 cursor-pointer shadow-sm">
-                Upload Sheet
+                Upload another sheet
                 <input
                   type="file"
                   accept=".csv,.txt,.xls,.xlsx"
@@ -1237,79 +1356,101 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                   className="hidden"
                 />
               </label>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Comparable Set:</span>
-              <div className="relative min-w-[200px]">
-                <select 
-                  value={selectedCompSet}
-                  onChange={(e) => setSelectedCompSet(e.target.value)}
-                  className="w-full appearance-none pl-3 pr-8 py-1.5 bg-white border border-gray-200 rounded text-xs font-bold text-[#2a433a] focus:outline-none focus:ring-2 focus:ring-[#2a433a]/10 cursor-pointer shadow-sm"
-                >
-                  {COMPARABLE_SETS.map(set => (
-                    <option key={set.id} value={set.id}>{set.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-            </div>
+            )}
           </div>
 
-          {uploadedCompsSheet && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-3 bg-emerald-50/40 border-b border-emerald-100 flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-bold text-[#2a433a] uppercase tracking-wider">Uploaded Sheet</h3>
-                  <p className="text-[10px] text-gray-500 font-medium mt-0.5">{uploadedCompsSheet.name}</p>
+          {isProcessingCompsSheet ? (
+            <div className="mx-auto flex min-h-[360px] w-full max-w-3xl flex-col items-center justify-center rounded-xl border border-emerald-100 bg-white px-6 py-10 text-center shadow-sm">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                <RefreshCw className="h-7 w-7 animate-spin" />
+              </div>
+              <p className="text-base font-black text-[#2a433a]">Splitting your sheet into 3 comp sets</p>
+              <p className="mt-2 max-w-md text-xs font-medium leading-relaxed text-gray-500">
+                Reading the uploaded sheet, separating the comparable companies into clean groups, and getting the market comps view ready.
+              </p>
+              <div className="mt-5 h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-emerald-50">
+                <div className="h-full w-2/3 animate-pulse rounded-full bg-emerald-500"></div>
+              </div>
+            </div>
+          ) : !uploadedCompsSheet ? (
+            <label
+              onDragOver={(event) => {
+                event.preventDefault();
+                setIsCompsDragActive(true);
+              }}
+              onDragLeave={() => setIsCompsDragActive(false)}
+              onDrop={handleCompsSheetDrop}
+              className={`mx-auto flex min-h-[360px] w-full max-w-3xl cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed bg-white px-6 py-10 text-center shadow-sm transition-all ${
+                isCompsDragActive ? 'border-emerald-500 bg-emerald-50/50' : 'border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/20'
+              }`}
+            >
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+                <UploadCloud className="h-8 w-8" />
+              </div>
+              <p className="text-base font-black text-[#2a433a]">Upload market comps sheet</p>
+              <p className="mt-2 max-w-md text-xs font-medium leading-relaxed text-gray-500">
+                Drag and drop a CSV, TXT, XLS, or XLSX file here, or click this area to choose a file from your computer.
+              </p>
+              <div className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#2a433a] px-4 py-2 text-xs font-bold text-white shadow-sm">
+                <FileSpreadsheet className="h-4 w-4" />
+                Select sheet file
+              </div>
+              <input
+                type="file"
+                accept=".csv,.txt,.xls,.xlsx"
+                onChange={handleCompsSheetUpload}
+                className="hidden"
+              />
+            </label>
+          ) : (
+            <>
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-[#2a433a] uppercase tracking-wider">Comparable Data Set</h3>
+                  <div className="relative min-w-[200px]">
+                    <select
+                      value={selectedCompSet}
+                      onChange={(e) => setSelectedCompSet(e.target.value)}
+                      className="w-full appearance-none pl-3 pr-8 py-1.5 bg-white border border-gray-200 rounded text-xs font-bold text-[#2a433a] focus:outline-none focus:ring-2 focus:ring-[#2a433a]/10 cursor-pointer shadow-sm"
+                    >
+                      {COMPARABLE_SETS.map(set => (
+                        <option key={set.id} value={set.id}>{set.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">{uploadedCompsSheet.rows.length} Rows</span>
-              </div>
-              <div className="overflow-x-auto no-scrollbar max-h-80">
-                <table className="w-full text-left text-xs">
-                  <tbody className="divide-y divide-gray-50">
-                    {uploadedCompsSheet.rows.map((row, rowIdx) => (
-                      <tr key={rowIdx} className={rowIdx === 0 ? 'bg-gray-50/60 font-bold text-gray-600' : 'hover:bg-gray-50/30'}>
-                        {row.map((cell, cellIdx) => (
-                          <td key={cellIdx} className="px-4 py-2 border-r border-gray-50 min-w-[120px]">
-                            {cell || '-'}
-                          </td>
-                        ))}
+                <div className="overflow-x-auto no-scrollbar">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-gray-50/50 border-b border-gray-100">
+                        <th className="px-6 py-2.5 font-bold text-gray-500 uppercase tracking-wider">Company</th>
+                        <th className="px-6 py-2.5 font-bold text-gray-500 uppercase tracking-wider">Description</th>
+                        <th className="px-6 py-2.5 text-right font-bold text-gray-500 uppercase tracking-wider">Net Sales</th>
+                        <th className="px-6 py-2.5 text-right font-bold text-gray-500 uppercase tracking-wider">Gross Profit</th>
+                        <th className="px-6 py-2.5 text-right font-bold text-gray-500 uppercase tracking-wider">Valuation</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {selectedSet.companies.map((company, i) => (
+                        <tr key={i} className="hover:bg-gray-50/30 transition-colors">
+                          <td className="px-6 py-2.5 text-gray-900 font-semibold">{company.company}</td>
+                          <td className="px-6 py-2.5 text-gray-600">{company.description}</td>
+                          <td className="px-6 py-2.5 text-right text-gray-700">{company.netSales}</td>
+                          <td className="px-6 py-2.5 text-right text-gray-700">{company.grossProfit}</td>
+                          <td className="px-6 py-2.5 text-right font-bold text-[#2a433a]">{company.valuation}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </>
           )}
-
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto no-scrollbar">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-gray-50/50 border-b border-gray-100">
-                    <th className="px-6 py-2.5 font-bold text-gray-500 uppercase tracking-wider">Company</th>
-                    <th className="px-6 py-2.5 font-bold text-gray-500 uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-2.5 text-right font-bold text-gray-500 uppercase tracking-wider">Net Sales</th>
-                    <th className="px-6 py-2.5 text-right font-bold text-gray-500 uppercase tracking-wider">Gross Profit</th>
-                    <th className="px-6 py-2.5 text-right font-bold text-gray-500 uppercase tracking-wider">Valuation</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {selectedSet.companies.map((company, i) => (
-                    <tr key={i} className="hover:bg-gray-50/30 transition-colors">
-                      <td className="px-6 py-2.5 text-gray-900 font-semibold">{company.company}</td>
-                      <td className="px-6 py-2.5 text-gray-600">{company.description}</td>
-                      <td className="px-6 py-2.5 text-right text-gray-700">{company.netSales}</td>
-                      <td className="px-6 py-2.5 text-right text-gray-700">{company.grossProfit}</td>
-                      <td className="px-6 py-2.5 text-right font-bold text-[#2a433a]">{company.valuation}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </section>
 
         {/* KPI Dashboard Section */}
-        <section className="space-y-3">
+        {uploadedCompsSheet && <section className="space-y-3">
           <div className="flex items-center justify-between border-t border-gray-100 pt-6">
             <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
               <span className="w-1.5 h-4 bg-[#2a433a] rounded-full"></span>
@@ -1388,7 +1529,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
               </div>
             </div>
           </div>
-        </section>
+        </section>}
       </div>
     );
   };
@@ -1399,6 +1540,19 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
       { id: 'carbon', title: 'Carbon Emissions', helper: 'Environmental inputs and risk write-up' },
       { id: 'tariff', title: 'Tariff Exposure', helper: 'Materials, industry exposure, and tariff impact' },
     ];
+    const tariffBasicFields = TARIFF_DATA_ANALYSIS.formulaFields.filter(field => field.label !== 'List of industries');
+    const riskAnalysisSections = [
+      { id: 'preRisk', title: 'Pre Risk', icon: Search },
+      { id: 'riskAssessment', title: 'Risk Assessment', icon: BarChart3 },
+    ];
+    const tariffRawMaterialChips = tariffKeyInputs
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+    const tariffMaterialSelectorChips = tariffMaterialSelector
+      .split(';')
+      .map(item => item.trim())
+      .filter(Boolean);
 
     const sections = [
       { id: 'sba', title: 'SBA Loan Default', data: RISK_ASSESSMENT_DATA.sbaLoanDefault },
@@ -1413,7 +1567,34 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
 
     return (
       <div className="p-4 space-y-6 overflow-y-auto h-full no-scrollbar bg-gray-50/30">
+        <div className="bg-white border border-gray-100 shadow-sm overflow-hidden">
+          <div className="grid grid-cols-2 w-full">
+            {riskAnalysisSections.map((tab) => {
+              const isActive = activeRiskAnalysisSection === tab.id;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveRiskAnalysisSection(tab.id)}
+                  className={`w-full px-6 py-4 text-left border-r border-gray-100 transition-all ${
+                    isActive
+                      ? 'bg-gradient-to-t from-emerald-200 via-emerald-50 to-white text-[#2a433a] border-b-4 border-b-emerald-600'
+                      : 'bg-white text-gray-400 border-b-4 border-b-transparent hover:bg-gray-50 hover:text-gray-600'
+                  }`}
+                >
+                  <span className="flex items-center gap-3 text-sm font-bold">
+                    <Icon className={`h-4 w-4 ${isActive ? 'text-emerald-600' : 'text-gray-400'}`} />
+                    {tab.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Pre Risk Analysis Section */}
+        {activeRiskAnalysisSection === 'preRisk' && (
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
@@ -1577,51 +1758,127 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                     <span className="text-[9px] font-black text-[#2a433a] bg-[#2a433a]/5 px-2 py-1 rounded-full border border-[#2a433a]/10">Formula input</span>
                   </div>
                   <div className="space-y-2">
-                    {TARIFF_DATA_ANALYSIS.formulaFields.map((field) => (
-                      <label key={field.label} className="block">
-                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{field.label}</span>
-                        {field.value.length > 120 ? (
-                          <textarea
-                            value={field.value}
-                            readOnly
-                            className="w-full h-20 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs text-gray-600 focus:outline-none resize-none leading-relaxed"
-                          />
-                        ) : (
-                          <input
-                            value={field.value}
-                            readOnly
-                            className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold text-[#2a433a] focus:outline-none"
-                          />
+                    {tariffBasicFields.map((field) => (
+                      <React.Fragment key={field.label}>
+                        <label className="block">
+                          <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{field.label}</span>
+                          {field.value.length > 120 ? (
+                            <textarea
+                              value={field.value}
+                              readOnly
+                              className="w-full h-20 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs text-gray-600 focus:outline-none resize-none leading-relaxed"
+                            />
+                          ) : (
+                            <input
+                              value={field.value}
+                              readOnly
+                              className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs font-bold text-[#2a433a] focus:outline-none"
+                            />
+                          )}
+                        </label>
+                        {field.label === 'Product / service' && (
+                          <label className="block">
+                            <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tariff source link</span>
+                            <input
+                              value={tariffSourceLink}
+                              onChange={(e) => setTariffSourceLink(e.target.value)}
+                              className="w-full px-3 py-2 bg-amber-50/30 border border-amber-100 rounded-lg text-xs text-blue-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                          </label>
                         )}
-                      </label>
+                      </React.Fragment>
                     ))}
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="p-4 bg-emerald-50/30 rounded-xl border border-emerald-100">
-                    <h4 className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-2">Step 1: Key inputs via AI</h4>
-                    <textarea
-                      value={tariffKeyInputs}
-                      readOnly
-                      placeholder="Click Generate Tariff Analysis to identify raw materials / inputs..."
-                      className="w-full h-20 px-3 py-2 bg-white/70 border border-emerald-100 rounded-lg text-xs text-gray-600 focus:outline-none resize-none leading-relaxed"
-                    />
+                    <h4 className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-2">Raw Materials</h4>
+                    {tariffRawMaterialChips.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {tariffRawMaterialChips.map((item) => (
+                          <span
+                            key={item}
+                            className="px-3 py-1.5 rounded-full bg-white border border-emerald-100 text-[10px] font-black text-[#2a433a] shadow-sm"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-3 py-2 bg-white/70 border border-emerald-100 rounded-lg text-xs text-gray-400">
+                        Click Generate Tariff Analysis to identify raw materials / inputs...
+                      </p>
+                    )}
+
+                    <div className="mt-4 overflow-x-auto rounded-lg border border-emerald-100 bg-white/70">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-emerald-50/60">
+                          <tr className="text-[10px] text-emerald-700 uppercase tracking-widest">
+                            <th className="px-3 py-2">Industry</th>
+                            <th className="px-3 py-2 text-right">Base</th>
+                            <th className="px-3 py-2 text-right">China</th>
+                            <th className="px-3 py-2 text-right">Combined</th>
+                            <th className="px-3 py-2 text-right">Class</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-emerald-50">
+                          {TARIFF_DATA_ANALYSIS.industryRisks.map((row) => (
+                            <tr key={row.industry}>
+                              <td className="px-3 py-2 font-bold text-gray-600">{row.industry}</td>
+                              <td className="px-3 py-2 text-right">{row.baseVulnerabilityScore}</td>
+                              <td className="px-3 py-2 text-right">{row.chinaExposure}</td>
+                              <td className="px-3 py-2 text-right font-bold text-[#2a433a]">{row.combinedRiskScore}</td>
+                              <td className={`px-3 py-2 text-right font-bold ${row.classification.includes('Moderate') ? 'text-amber-600' : 'text-emerald-600'}`}>{row.classification}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   <div className="p-4 bg-blue-50/40 rounded-xl border border-blue-100">
-                    <h4 className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-2">Step 2: Material selector</h4>
-                    <input
-                      value={tariffMaterialSelector}
-                      readOnly
-                      placeholder="Selected materials will appear here..."
-                      className="w-full px-3 py-2 bg-white/70 border border-blue-100 rounded-lg text-xs font-bold text-[#2a433a] focus:outline-none"
-                    />
-                    <p className="mt-2 text-[10px] text-blue-700/70 leading-relaxed">{TARIFF_DATA_ANALYSIS.materialImpactWriteUp}</p>
+                    <h4 className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-2">Material Selector</h4>
+                    {tariffMaterialSelectorChips.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {tariffMaterialSelectorChips.map((item) => (
+                          <span
+                            key={item}
+                            className="px-3 py-1.5 rounded-full bg-white border border-blue-100 text-[10px] font-black text-[#2a433a] shadow-sm"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-3 py-2 bg-white/70 border border-blue-100 rounded-lg text-xs text-gray-400">
+                        Selected materials will appear here...
+                      </p>
+                    )}
+                    <div className="mt-4 overflow-x-auto rounded-lg border border-blue-100 bg-white/70">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-blue-50/70">
+                          <tr className="text-[10px] text-blue-700 uppercase tracking-widest">
+                            <th className="px-3 py-2">Name</th>
+                            <th className="px-3 py-2 text-right">Short-run</th>
+                            <th className="px-3 py-2 text-right">Long-run</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-blue-50">
+                          {TARIFF_DATA_ANALYSIS.selectedMaterialImpacts.map((row) => (
+                            <tr key={row.name} className="bg-[#2a433a]/5">
+                              <td className="px-3 py-2 font-bold text-gray-600">{row.name}</td>
+                              <td className="px-3 py-2 text-right">{row.shortRun}%</td>
+                              <td className="px-3 py-2 text-right">{row.longRun}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   <div className="p-4 bg-purple-50/40 rounded-xl border border-purple-100">
-                    <h4 className="text-[10px] font-bold text-purple-700 uppercase tracking-widest mb-2">Step 3: Industry category</h4>
+                    <h4 className="text-[10px] font-bold text-purple-700 uppercase tracking-widest mb-2">Industry Category</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <input
                         value={tariffSector}
@@ -1635,106 +1892,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                         className="w-full px-3 py-2 bg-white/70 border border-purple-100 rounded-lg text-xs font-bold text-red-600 focus:outline-none"
                       />
                     </div>
-                    <p className="mt-2 text-[10px] text-purple-700/70 leading-relaxed">{TARIFF_DATA_ANALYSIS.sectorWriteUp}</p>
                   </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 pt-5 border-t border-gray-100">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Industry Risk Scores</h4>
-                    <span className="text-[9px] font-black text-[#2a433a] bg-[#2a433a]/5 px-2 py-1 rounded-full border border-[#2a433a]/10">Formula input</span>
-                  </div>
-                  <div className="overflow-x-auto rounded-lg border border-gray-100">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-gray-50">
-                        <tr className="text-[10px] text-gray-400 uppercase tracking-widest">
-                          <th className="px-3 py-2">Industry</th>
-                          <th className="px-3 py-2 text-right">Base</th>
-                          <th className="px-3 py-2 text-right">China</th>
-                          <th className="px-3 py-2 text-right">Combined</th>
-                          <th className="px-3 py-2 text-right">Class</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {TARIFF_DATA_ANALYSIS.industryRisks.map((row) => (
-                          <tr key={row.industry}>
-                            <td className="px-3 py-2 font-bold text-gray-600">{row.industry}</td>
-                            <td className="px-3 py-2 text-right">{row.baseVulnerabilityScore}</td>
-                            <td className="px-3 py-2 text-right">{row.chinaExposure}</td>
-                            <td className="px-3 py-2 text-right font-bold text-[#2a433a]">{row.combinedRiskScore}</td>
-                            <td className={`px-3 py-2 text-right font-bold ${row.classification.includes('Moderate') ? 'text-amber-600' : 'text-emerald-600'}`}>{row.classification}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <label className="block">
-                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Relevant industries and risk</span>
-                    <input
-                      value={TARIFF_DATA_ANALYSIS.relevantIndustriesAndRisk}
-                      readOnly
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs text-gray-600 focus:outline-none"
-                    />
-                  </label>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Material Price Impacts</h4>
-                    <span className="text-[9px] font-black text-[#2a433a] bg-[#2a433a]/5 px-2 py-1 rounded-full border border-[#2a433a]/10">Formula input</span>
-                  </div>
-                  <div className="overflow-x-auto rounded-lg border border-gray-100">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-gray-50">
-                        <tr className="text-[10px] text-gray-400 uppercase tracking-widest">
-                          <th className="px-3 py-2">Name</th>
-                          <th className="px-3 py-2 text-right">Short-run</th>
-                          <th className="px-3 py-2 text-right">Long-run</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {TARIFF_DATA_ANALYSIS.materialImpacts.map((row) => (
-                          <tr key={row.name} className={TARIFF_DATA_ANALYSIS.selectedMaterialImpacts.some(item => item.name === row.name) ? 'bg-[#2a433a]/5' : ''}>
-                            <td className="px-3 py-2 font-bold text-gray-600">{row.name}</td>
-                            <td className="px-3 py-2 text-right">{row.shortRun}%</td>
-                            <td className="px-3 py-2 text-right">{row.longRun}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 pt-5 border-t border-gray-100">
-                <div className="space-y-3">
-                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">General tariff context</h4>
-                  <textarea
-                    value={TARIFF_DATA_ANALYSIS.generalTariffContext}
-                    readOnly
-                    className="w-full h-40 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs text-gray-600 focus:outline-none resize-none leading-relaxed"
-                  />
-                  <input
-                    value={tariffSourceLink}
-                    onChange={(e) => setTariffSourceLink(e.target.value)}
-                    className="w-full px-3 py-2 bg-amber-50/30 border border-amber-100 rounded-lg text-xs text-blue-700 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">List of materials</h4>
-                  <textarea
-                    value={TARIFF_DATA_ANALYSIS.materialsList}
-                    readOnly
-                    className="w-full h-40 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs text-gray-600 focus:outline-none resize-none leading-relaxed"
-                  />
-                  <textarea
-                    value={TARIFF_DATA_ANALYSIS.sectorFields.find(field => field.label === 'List of industries')?.value ?? ''}
-                    readOnly
-                    className="w-full h-16 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-xs text-gray-600 focus:outline-none resize-none leading-relaxed"
-                  />
                 </div>
               </div>
 
@@ -1878,8 +2036,10 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
           </div>
           )}
         </section>
+        )}
 
         {/* Risk Assessment Section */}
+        {activeRiskAnalysisSection === 'riskAssessment' && (
         <section className="space-y-4 pt-4 border-t border-gray-100">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-[#2a433a] flex items-center gap-2">
@@ -1891,6 +2051,12 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
           <div className="space-y-6">
             {sections.map((section) => {
               const data = section.data as any;
+              const sectionWriteUp = riskAssessmentWriteUps[section.id] ?? data.writeUp;
+              const isEditingSectionWriteUp = editingRiskWriteUps[section.id];
+              const isRefiningSectionWriteUp = refiningRiskWriteUps[section.id];
+              const tariffImpactWriteUp = riskAssessmentWriteUps.tariffImpact ?? RISK_ASSESSMENT_DATA.tariff.writeUp;
+              const isEditingTariffImpact = editingRiskWriteUps.tariffImpact;
+              const isRefiningTariffImpact = refiningRiskWriteUps.tariffImpact;
               return (
                 <div key={section.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="px-6 py-2.5 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
@@ -2153,15 +2319,113 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                     <div className="lg:col-span-2">
                       <div className="h-full relative pl-6 border-l border-gray-50">
                         <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-500/30 rounded-full"></div>
-                        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
-                          {data.writeUp}
-                        </p>
+                        <div className="mb-2 flex justify-end gap-1.5">
+                          {isEditingSectionWriteUp ? (
+                            <>
+                              <button
+                                type="button"
+                                title="Save write-up"
+                                onClick={() => setEditingRiskWriteUps(prev => ({ ...prev, [section.id]: false }))}
+                                className="flex h-7 w-7 items-center justify-center rounded-md border border-emerald-100 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Cancel edit"
+                                onClick={() => handleCancelRiskWriteUpEdit(section.id, data.writeUp)}
+                                className="flex h-7 w-7 items-center justify-center rounded-md border border-red-100 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              title="Edit write-up"
+                              onClick={() => setEditingRiskWriteUps(prev => ({ ...prev, [section.id]: true }))}
+                              className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-100 bg-white text-gray-500 transition-colors hover:border-[#2a433a]/20 hover:bg-[#2a433a]/5 hover:text-[#2a433a]"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            title="AI refine write-up"
+                            onClick={() => handleRefineRiskWriteUp(section.id)}
+                            disabled={isRefiningSectionWriteUp}
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-purple-100 bg-purple-50 text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <RefreshCw className={`h-3.5 w-3.5 ${isRefiningSectionWriteUp ? 'animate-spin' : ''}`} />
+                          </button>
+                        </div>
+                        {isEditingSectionWriteUp ? (
+                          <textarea
+                            value={sectionWriteUp}
+                            onChange={(e) => handleRiskWriteUpChange(section.id, e.target.value)}
+                            className="h-40 w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#2a433a]"
+                          />
+                        ) : (
+                          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+                            {sectionWriteUp}
+                          </p>
+                        )}
                         {section.id === 'supply' && (
                           <div className="mt-4 pt-4 border-t border-gray-100">
-                            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Tariff Impact</h4>
-                            <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
-                              {RISK_ASSESSMENT_DATA.tariff.writeUp}
-                            </p>
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Tariff Impact</h4>
+                              <div className="flex gap-1.5">
+                                {isEditingTariffImpact ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      title="Save tariff impact"
+                                      onClick={() => setEditingRiskWriteUps(prev => ({ ...prev, tariffImpact: false }))}
+                                      className="flex h-7 w-7 items-center justify-center rounded-md border border-emerald-100 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Cancel edit"
+                                      onClick={() => handleCancelRiskWriteUpEdit('tariffImpact', RISK_ASSESSMENT_DATA.tariff.writeUp)}
+                                      className="flex h-7 w-7 items-center justify-center rounded-md border border-red-100 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    title="Edit tariff impact"
+                                    onClick={() => setEditingRiskWriteUps(prev => ({ ...prev, tariffImpact: true }))}
+                                    className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-100 bg-white text-gray-500 transition-colors hover:border-[#2a433a]/20 hover:bg-[#2a433a]/5 hover:text-[#2a433a]"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  title="AI refine tariff impact"
+                                  onClick={() => handleRefineRiskWriteUp('tariffImpact')}
+                                  disabled={isRefiningTariffImpact}
+                                  className="flex h-7 w-7 items-center justify-center rounded-md border border-purple-100 bg-purple-50 text-purple-700 transition-colors hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <RefreshCw className={`h-3.5 w-3.5 ${isRefiningTariffImpact ? 'animate-spin' : ''}`} />
+                                </button>
+                              </div>
+                            </div>
+                            {isEditingTariffImpact ? (
+                              <textarea
+                                value={tariffImpactWriteUp}
+                                onChange={(e) => handleRiskWriteUpChange('tariffImpact', e.target.value)}
+                                className="h-32 w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#2a433a]"
+                              />
+                            ) : (
+                              <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+                                {tariffImpactWriteUp}
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2172,14 +2436,38 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
             })}
           </div>
         </section>
+        )}
       </div>
     );
   };
 
 
   const renderReportValuationSubTab = () => {
+    const calculatedValuation = REPORT_VALUATION_DATA.finalValuation.find(row => row.label === 'Overall Valuation (Weighted)');
+    const concludedValue = REPORT_VALUATION_DATA.finalValuation.find(row => row.label === 'Concluded Value');
+
     return (
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)] gap-6 p-4 bg-gray-50/30">
+        {calculatedValuation && (
+          <div className="xl:col-span-3 order-1 flex justify-start pl-0 xl:pl-16">
+            <div className="w-full max-w-3xl rounded-xl border border-emerald-200 bg-emerald-50 px-6 py-5 text-center shadow-sm">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Calculated Valuation Amount</p>
+                  <p className="mt-2 text-3xl font-black tracking-tight text-[#2a433a]">{calculatedValuation.value}</p>
+                  <p className="mt-2 text-xs font-medium text-gray-500">Overall weighted valuation from the final valuation table</p>
+                </div>
+                {concludedValue && (
+                  <div className="border-t border-emerald-200 pt-5 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Concluded Value</p>
+                    <p className="mt-2 text-3xl font-black tracking-tight text-[#2a433a]">{concludedValue.value}</p>
+                    <p className="mt-2 text-xs font-medium text-gray-500">Final selected value shown in the valuation output</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         <div className="space-y-6 order-2 xl:pl-6">
 
         {/* Growth Rate Factors Table */}
@@ -2195,7 +2483,7 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                   <th className="px-6 py-2.5">Description</th>
                   <th className="px-6 py-2.5 text-right">Value</th>
                 </tr>
-              </thead>
+                </thead>
               <tbody className="divide-y divide-gray-50">
                 {REPORT_VALUATION_DATA.assumptions.growthRateFactors.map((row, i) => (
                   <tr key={i} className="hover:bg-gray-50/30">
@@ -2636,17 +2924,21 @@ export const ValuationGrid = ({ projectedCommonSizingBasisLabel = 'CS Avg' }: Va
                 <button className="text-xs text-[#2a433a] font-bold hover:underline px-4">Edit Table</button>
               </div>
               <div className="divide-y divide-gray-100">
-                {ASSUMPTION_CATEGORIES[selectedAssumptionCategory as keyof typeof ASSUMPTION_CATEGORIES].map((tableName) => (
-                  <div key={tableName} className="p-4">
-                    {renderTableWithWrapper(tableName)}
-                    {selectedAssumptionCategory === 'Weighted Tables' && tableName === 'Historical Financial Weighting' && (
-                      renderExplanationField("Explanation", weightedExplanation, setWeightedExplanation)
-                    )}
-                    {selectedAssumptionCategory === 'Weighted Tables' && tableName === 'Valuation Methodology Weighting' && (
-                      renderExplanationField("Explaination", onboardingExplanation, setOnboardingExplanation)
-                    )}
-                  </div>
-                ))}
+                {ASSUMPTION_CATEGORIES[selectedAssumptionCategory as keyof typeof ASSUMPTION_CATEGORIES].map((tableName) => {
+                  const isSectionOpen = openAssumptionSections[tableName] ?? false;
+
+                  return (
+                    <div key={tableName} className="p-4">
+                      {renderTableWithWrapper(tableName)}
+                      {isSectionOpen && selectedAssumptionCategory === 'Weighted Tables' && tableName === 'Historical Financial Weighting' && (
+                        renderExplanationField("Explanation", weightedExplanation, setWeightedExplanation)
+                      )}
+                      {isSectionOpen && selectedAssumptionCategory === 'Weighted Tables' && tableName === 'Valuation Methodology Weighting' && (
+                        renderExplanationField("Explaination", onboardingExplanation, setOnboardingExplanation)
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
